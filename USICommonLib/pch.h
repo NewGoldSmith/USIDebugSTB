@@ -20,6 +20,7 @@
 #include <sstream>
 #include <iostream>
 #include <map>
+#include "MemoryRental.h"
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "comctl32")
 #pragma comment(linker,"\"/manifestdependency:type='win32' \

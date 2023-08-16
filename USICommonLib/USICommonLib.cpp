@@ -1,6 +1,12 @@
-﻿//Copyright (c) 20220 2023, Gold Smith
-//Released under the MIT license
-//https ://opensource.org/licenses/mit-license.php
+﻿/**
+ * @file USICommonLib.cpp
+ * @brief 共通ライブラリ実装
+ * @author Gold Smith
+ * @date 2022-2023
+ *
+ * Released under the MIT license
+ * https: //opensource.org/licenses/mit-license.php
+ */
 #include "pch.h"
 #include "framework.h"
 #include "USICommonLib.h"
@@ -8,7 +14,7 @@
 using namespace std;
 
 namespace DUSI_COMMON {
-	string ConvertCRLFA(const string& strString, const string& strCR, const string& strLF)
+	string ConvertLineEndingsWithCustomStringsA(const string& strString, const string& strCR, const string& strLF)
 	{
 		string strRet;
 		string strCRLF("\r\n");
@@ -79,7 +85,7 @@ namespace DUSI_COMMON {
 	}
 
 
-	wstring ConvertCRLFW(const wstring& strString, const wstring& strCR, const wstring& strLF)
+	wstring ConvertLineEndingsWithCustomStringsW(const wstring& strString, const wstring& strCR, const wstring& strLF)
 	{
 		wstring strRet;
 		wstring strCRLF(L"\r\n");
@@ -147,6 +153,17 @@ namespace DUSI_COMMON {
 			};
 		}
 		return(strRet);
+	}
+
+	string ReplaceCRLFWithLFA(const string& strString)
+	{
+		std::string str = strString;
+		std::string::size_type pos = 0;
+		while ((pos = str.find("\r\n", pos)) != std::string::npos) {
+			str.replace(pos, 2, "\n");
+			pos++;
+		}
+		return str;
 	}
 
 	string SeparatePhrase(string& str)
@@ -458,7 +475,7 @@ namespace DUSI_COMMON {
 			, wstr.data()
 			, static_cast<int>(wstr.size()))))
 		{
-			ErrOut(GetLastError(), __FILE__, __FUNCTION__, __LINE__);
+			ErrOut(GetLastError());
 			wstr.resize(0);
 			return wstr;
 		}
@@ -541,7 +558,7 @@ namespace DUSI_COMMON {
 			, wstr.data()
 			, static_cast<int>(wstr.size()))))
 		{
-			ErrOut(GetLastError(), __FILE__, __FUNCTION__, __LINE__);
+			ErrOut(GetLastError());
 			wstr.resize(0);
 			return wstr;
 		}
@@ -559,7 +576,93 @@ namespace DUSI_COMMON {
 		return WtoA(U8toW(u8str));
 	}
 
-	const string ErrOut(
+	string UnescapeStringA(const string& input)
+	{
+		std::map<std::string, char> escape_sequences = {
+			 {"\\a", '\a'},
+			 {"\\b", '\b'},
+			 {"\\f", '\f'},
+			 {"\\n", '\n'},
+			 {"\\r", '\r'},
+			 {"\\t", '\t'},
+			 {"\\v", '\v'},
+			 {"\\\\", '\\'},
+			 {"\\'", '\''},
+			 {"\\\"", '\"'},
+			 {"\\?", '\?'}
+		};
+
+		std::string output;
+		for (size_t i = 0; i < input.size(); ++i) {
+			if (input[i] == '\\' && i + 1 < input.size()) {
+				if (input[i + 1] == 'x' && i + 3 < input.size()) {
+					char c = static_cast<char>(std::stoi(input.substr(i + 2, 2), nullptr, 16));
+					output += c;
+					i += 3;
+				}
+				else {
+					std::string key = input.substr(i, 2);
+					if (escape_sequences.count(key)) {
+						output += escape_sequences[key];
+						++i;
+					}
+					else {
+						output += input[i];
+					}
+				}
+			}
+			else {
+				output += input[i];
+			}
+		}
+
+		return output;
+	}
+
+	wstring UnescapeStringW(const wstring& input)
+	{
+		std::map<std::wstring, wchar_t> escape_sequences = {
+			 {L"\\a", L'\a'},
+			 {L"\\b", L'\b'},
+			 {L"\\f", L'\f'},
+			 {L"\\n", L'\n'},
+			 {L"\\r", L'\r'},
+			 {L"\\t", L'\t'},
+			 {L"\\v", L'\v'},
+			 {L"\\\\", L'\\'},
+			 {L"\\'", L'\''},
+			 {L"\\\"", L'\"'},
+			 {L"\\?", L'\?'}
+		};
+
+		std::wstring output;
+		for (size_t i = 0; i < input.size(); ++i) {
+			if (input[i] == L'\\' && i + 1 < input.size()) {
+				if (input[i + 1] == L'x' && i + 3 < input.size()) {
+					wchar_t c = static_cast<wchar_t>(std::stoi(input.substr(i + 2, 2), nullptr, 16));
+					output += c;
+					i += 3;
+				}
+				else {
+					std::wstring key = input.substr(i, 2);
+					if (escape_sequences.count(key)) {
+						output += escape_sequences[key];
+						++i;
+					}
+					else {
+						output += input[i];
+					}
+				}
+			}
+			else {
+				output += input[i];
+			}
+		}
+
+		return output;
+	}
+
+	const string ErrOut_(
 		DWORD dw
 		, LPCSTR lpszFile
 		, LPCSTR lpszFunction
@@ -569,32 +672,85 @@ namespace DUSI_COMMON {
 		LPVOID lpMsgBuf;
 
 		FormatMessage(
-			FORMAT_MESSAGE_ALLOCATE_BUFFER |
-			FORMAT_MESSAGE_FROM_SYSTEM |
-			FORMAT_MESSAGE_IGNORE_INSERTS,
-			NULL,
-			dw,
-			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-			(LPTSTR)&lpMsgBuf,
-			0, NULL);
-
+			FORMAT_MESSAGE_ALLOCATE_BUFFER
+			| FORMAT_MESSAGE_FROM_SYSTEM
+			| FORMAT_MESSAGE_IGNORE_INSERTS
+			| FORMAT_MESSAGE_MAX_WIDTH_MASK
+			, NULL
+			, dw
+			, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT)
+			, (LPTSTR)&lpMsgBuf
+			, 0, NULL);
+		string strOpMessage;
+		if (strlen(lpszOpMessage))
+		{
+			strOpMessage =(string) "User Message:\"" + lpszOpMessage + "\"";
+		}
 		stringstream ss;
 		ss << lpszFile << "(" << dwLine << "): error C" << dw << ": "\
 			<< TtoA((LPTSTR)lpMsgBuf)
 			<< "function name: " << lpszFunction
-			<< " User Message: " << lpszOpMessage << "\r\n";
-		MyTRACE(ss.str().c_str());
+			<< strOpMessage << "\r\n";
+		OutputDebugStringA(ss.str().c_str());
 		cerr << ss.str();
 		LocalFree(lpMsgBuf);
 
 		return ss.str().c_str();
 	}
 
-	const string ErrMes(const string& str)
+	const string ErrMes_(
+		const string & lpszMessage
+		, const string &lpszFile
+		, const string &lpszFunction
+		, const DWORD dwLine)
 	{
-		cerr << str;
-		OutputDebugStringA(str.c_str());
-		return str;
+		string strFileName;
+		if (lpszFile == "")
+		{
+			strFileName = "";
+		}
+		else {
+			strFileName = lpszFile;
+		}
+		string strdwLine;
+		if (dwLine == MAXDWORD)
+		{
+			strdwLine = "";
+		}
+		else {
+			strdwLine = "(" + to_string((int)dwLine) + "): ";
+		}
+		string strFunction;
+		if (lpszFunction == "")
+		{
+			strFunction = "";
+		}
+		else {
+			strFunction = string(": ") + "function name: " + lpszFunction;
+		}
+		stringstream ss;
+		ss << strFileName << strdwLine << "\""<<lpszMessage<<"\""
+			<< strFunction
+			<< "\r\n";
+		OutputDebugStringA(ss.str().c_str());
+		cerr << ss.str();
+		return ss.str();
+	}
+
+	std::string ToUpper(const std::string& str)
+	{
+		std::string result;
+		result.resize(str.size());
+		std::transform(str.begin(), str.end(), result.begin(), ::toupper);
+		return result;
+	}
+
+	std::wstring ToUpper(const std::wstring& str)
+	{
+		std::wstring result;
+		result.resize(str.size());
+		std::transform(str.begin(), str.end(), result.begin(), ::towupper);
+		return result;
 	}
 
 	void ParseStr(tstring const& str, const size_t pos,const tstring strEscCodes, const map<TCHAR, tstring>& mapChToStr, const LPNMLVCUSTOMDRAW lplvcd)
@@ -643,105 +799,9 @@ namespace DUSI_COMMON {
 		const tstring& str
 		, const LPNMLVCUSTOMDRAW& lplvcd)
 	{
-		COLORREF DefCol = GetTextColor(lplvcd->nmcd.hdc);
-		SetTextColor(lplvcd->nmcd.hdc, RGB(0, 192, 192));
+		COLORREF PrevColRef=SetTextColor(lplvcd->nmcd.hdc, RGB(0, 192, 192));
 		Draw(str, lplvcd);
-		SetTextColor(lplvcd->nmcd.hdc, DefCol);
-	}
-
-	BOOL LoadDlgPosition(RECT& rect)
-	{
-		tstring tstrFileName = MakeIniPath();
-		tstring tstrReturn(DUSI_COMMON::BUFFER_SIZE, _T('\0'));
-		tstrReturn.resize(GetPrivateProfileString(
-			_T("SYSTEM")
-			, _T("WINDOW_POS_MAIN_LEFT")
-			, _T("0")
-			, tstrReturn.data()
-			, tstrReturn.size()
-			, tstrFileName.c_str()));
-		if (tstrReturn.size())
-		{
-			rect.left = _ttoi(tstrReturn.c_str());
-		}
-		else {
-			return FALSE;
-		}
-		tstrReturn.resize(DUSI_COMMON::BUFFER_SIZE, _T('\0'));
-		tstrReturn.resize(GetPrivateProfileString(
-			_T("SYSTEM")
-			, _T("WINDOW_POS_MAIN_TOP")
-			, _T("0")
-			, tstrReturn.data()
-			, tstrReturn.size()
-			, tstrFileName.c_str()));
-		if (tstrReturn.size())
-		{
-			rect.top = _ttoi(tstrReturn.c_str());
-		}
-		else {
-			return FALSE;
-		}
-		tstrReturn.resize(DUSI_COMMON::BUFFER_SIZE, _T('\0'));
-		tstrReturn.resize(GetPrivateProfileString(
-			_T("SYSTEM")
-			, _T("WINDOW_POS_MAIN_RIGHT")
-			, _T("0"), tstrReturn.data()
-			, tstrReturn.size()
-			, tstrFileName.c_str()));
-		if (tstrReturn.size())
-		{
-			rect.right = _ttoi(tstrReturn.c_str());
-		}
-		else {
-			return FALSE;
-		}
-		tstrReturn.resize(DUSI_COMMON::BUFFER_SIZE, _T('\0'));
-		tstrReturn.resize(GetPrivateProfileString(
-			_T("SYSTEM")
-			, _T("WINDOW_POS_MAIN_BOTTOM")
-			, _T("0")
-			, tstrReturn.data()
-			, tstrReturn.size()
-			, tstrFileName.c_str()));
-		if (tstrReturn.size())
-		{
-			rect.bottom = _ttoi(tstrReturn.c_str());
-		}
-		else {
-			return FALSE;
-		}
-		return IsRectEmpty(&rect) ? FALSE : TRUE;
-
-	}
-
-	void SaveDlgPosition(HWND hDlg)
-	{
-		tstring tstrFileName = MakeIniPath();
-		tstring tstrSection(_T("SYSTEM"));
-		RECT rect{};
-		TCHAR buf[MAX_PATH];
-		::GetWindowRect(hDlg, &rect);
-		_itot_s(rect.left, buf, MAX_PATH, 10);
-		WritePrivateProfileString(_T("SYSTEM")
-			, _T("WINDOW_POS_MAIN_LEFT")
-			, buf
-			, tstrFileName.c_str());
-		_itot_s(rect.top, buf, MAX_PATH, 10);
-		WritePrivateProfileString(_T("SYSTEM")
-			, _T("WINDOW_POS_MAIN_TOP")
-			, buf
-			, tstrFileName.c_str());
-		_itot_s(rect.right, buf, MAX_PATH, 10);
-		WritePrivateProfileString(_T("SYSTEM")
-			, _T("WINDOW_POS_MAIN_RIGHT")
-			, buf
-			, tstrFileName.c_str());
-		_itot_s(rect.bottom, buf, MAX_PATH, 10);
-		WritePrivateProfileString(_T("SYSTEM")
-			, _T("WINDOW_POS_MAIN_BOTTOM")
-			, buf
-			, tstrFileName.c_str());
+		SetTextColor(lplvcd->nmcd.hdc, PrevColRef);
 	}
 
 	tstring MakeIniPath()
@@ -780,127 +840,42 @@ namespace DUSI_COMMON {
 		return tstrProfileName;
 	}
 
-	BOOL LoadConsoleWindowPosition(RECT& rect)
-	{
-		tstring tstrFileName = MakeIniPath();
-		tstring tstrReturn(BUFFER_SIZE, _T('\0'));
-		tstrReturn.resize(GetPrivateProfileString(
-			_T("SYSTEM")
-			, _T("WINDOW_POS_CONSOLE_LEFT")
-			, _T("0")
-			, tstrReturn.data()
-			, tstrReturn.size()
-			, tstrFileName.c_str()));
-		if (tstrReturn.size())
-		{
-			rect.left = _ttoi(tstrReturn.c_str());
-		}
-		else {
-			return FALSE;
-		}
-		tstrReturn.resize(BUFFER_SIZE, _T('\0'));
-		tstrReturn.resize(GetPrivateProfileString(
-			_T("SYSTEM")
-			, _T("WINDOW_POS_CONSOLE_TOP")
-			, _T("0")
-			, tstrReturn.data()
-			, tstrReturn.size()
-			, tstrFileName.c_str()));
-		if (tstrReturn.size())
-		{
-			rect.top = _ttoi(tstrReturn.c_str());
-		}
-		else {
-			return FALSE;
-		}
-		tstrReturn.resize(BUFFER_SIZE, _T('\0'));
-		tstrReturn.resize(GetPrivateProfileString(
-			_T("SYSTEM")
-			, _T("WINDOW_POS_CONSOLE_RIGHT")
-			, _T("0"), tstrReturn.data()
-			, tstrReturn.size()
-			, tstrFileName.c_str()));
-		if (tstrReturn.size())
-		{
-			rect.right = _ttoi(tstrReturn.c_str());
-		}
-		else {
-			return FALSE;
-		}
-		tstrReturn.resize(BUFFER_SIZE, _T('\0'));
-		tstrReturn.resize(GetPrivateProfileString(
-			_T("SYSTEM")
-			, _T("WINDOW_POS_CONSOLE_BOTTOM")
-			, _T("0")
-			, tstrReturn.data()
-			, tstrReturn.size()
-			, tstrFileName.c_str()));
-		if (tstrReturn.size())
-		{
-			rect.bottom = _ttoi(tstrReturn.c_str());
-		}
-		else {
-			return FALSE;
-		}
-		return !IsRectEmpty(&rect);
-	}
-
-	void SaveConsoleWindowPosition()
-	{
-		HWND hCon(NULL);
-		if (!(hCon = GetConsoleWindow()))
-		{
-			return;
-		}
-		tstring tstrFileName = MakeIniPath();
-		tstring tstrSection(_T("SYSTEM"));
-		RECT rect{};
-		TCHAR buf[MAX_PATH];
-		::GetWindowRect(hCon, &rect);
-		_itot_s(rect.left, buf, MAX_PATH, 10);
-		WritePrivateProfileString(_T("SYSTEM")
-			, _T("WINDOW_POS_CONSOLE_LEFT")
-			, buf
-			, tstrFileName.c_str());
-		_itot_s(rect.top, buf, MAX_PATH, 10);
-		WritePrivateProfileString(_T("SYSTEM")
-			, _T("WINDOW_POS_CONSOLE_TOP")
-			, buf
-			, tstrFileName.c_str());
-		_itot_s(rect.right, buf, MAX_PATH, 10);
-		WritePrivateProfileString(_T("SYSTEM")
-			, _T("WINDOW_POS_CONSOLE_RIGHT")
-			, buf
-			, tstrFileName.c_str());
-		_itot_s(rect.bottom, buf, MAX_PATH, 10);
-		WritePrivateProfileString(_T("SYSTEM")
-			, _T("WINDOW_POS_CONSOLE_BOTTOM")
-			, buf
-			, tstrFileName.c_str());
-	}
-
 	BOOL SetWindowAppropriatePosition(HWND hWnd, RECT& rect)
 	{
 		if (IsRectEmpty(&rect))
 		{
 			return FALSE;
 		}
+
+		MONITORINFO MI{};
+		MI.cbSize = sizeof(MONITORINFO);
+		HMONITOR hMonitor = MonitorFromRect(&rect, MONITOR_DEFAULTTOPRIMARY);
+		GetMonitorInfo(hMonitor, &MI);
+		if (PtInRect(&MI.rcWork, POINT{ rect.left, rect.top }))
+		{
+			SetWindowPos(hWnd, NULL, rect.left, rect.top
+				, rect.right - rect.left, rect.bottom - rect.top
+				, SWP_SHOWWINDOW);
+			return TRUE;
+		}
 		else {
-			HMONITOR hMonitor = NULL;
-			MONITORINFO MonitorInfo{ 0 };
-			MonitorInfo.cbSize = sizeof(MONITORINFO);
-			hMonitor = MonitorFromRect(&rect, MONITOR_DEFAULTTOPRIMARY);
-			GetMonitorInfo(hMonitor, &MonitorInfo);
-			if (PtInRect(&MonitorInfo.rcWork, POINT{ rect.left, rect.top }))
-			{
-				RECT nowrect{};
-				GetWindowRect(hWnd, &nowrect);
-				SetWindowPos(hWnd, NULL, rect.left, rect.top
-					, nowrect.right - nowrect.left, nowrect.bottom - nowrect.top
-					, SWP_SHOWWINDOW);
-				return TRUE;
-			}
-			return FALSE;
+			// モニターのサイズを取得する
+			int screenWidth = MI.rcWork.right - MI.rcWork.left;
+			int screenHeight = MI.rcWork.bottom - MI.rcWork.top;
+
+			// ダイアログボックスのサイズを取得する
+			RECT rect;
+			GetWindowRect(hWnd, &rect);
+			int dialogWidth = rect.right - rect.left;
+			int dialogHeight = rect.bottom - rect.top;
+
+			// ダイアログボックスの位置を計算する
+			int x = (screenWidth - dialogWidth) / 2;
+			int y = (screenHeight - dialogHeight) / 2;
+
+			// ダイアログボックスの位置を設定する
+			SetWindowPos(hWnd, HWND_TOP, x, y, 0, 0, SWP_NOSIZE);
+			return TRUE;
 		}
 	}
 
@@ -911,8 +886,10 @@ namespace DUSI_COMMON {
 		MONITORINFO MonitorInfo{};
 		MonitorInfo.cbSize = sizeof(MONITORINFO);
 		HMONITOR hMonitor;
-		if (!(hMonitor = 
-			MonitorFromPoint(POINT{ rcWnd.left,rcWnd.top }, MONITOR_DEFAULTTONULL)))
+		if (!MonitorFromPoint(POINT{ rcWnd.left,rcWnd.top }, MONITOR_DEFAULTTONULL)
+			|| !MonitorFromPoint(POINT{ rcWnd.left,rcWnd.bottom }, MONITOR_DEFAULTTONULL)
+			|| !MonitorFromPoint(POINT{ rcWnd.right,rcWnd.top }, MONITOR_DEFAULTTONULL)
+			|| !MonitorFromPoint(POINT{ rcWnd.right,rcWnd.bottom }, MONITOR_DEFAULTTONULL))
 		{
 			hMonitor =MonitorFromPoint(POINT{ rcWnd.left,rcWnd.top }
 			, MONITOR_DEFAULTTONEAREST);
@@ -920,41 +897,41 @@ namespace DUSI_COMMON {
 			LONG x = MonitorInfo.rcWork.left > rcWnd.left
 				? MonitorInfo.rcWork.left
 				: rcWnd.left;
-			LONG y = MonitorInfo.rcWork.top > rcWnd.top
-				? MonitorInfo.rcWork.top
-				: rcWnd.top;
-
-			SetWindowPos(hWnd, HWND_TOP
-				, x
-				, y
-				, rcWnd.right - rcWnd.left
-				, rcWnd.bottom - rcWnd.top
-				, SWP_SHOWWINDOW);
-			return FALSE;
-		}
-		GetMonitorInfo(hMonitor, &MonitorInfo);
-		{
-			LONG x = MonitorInfo.rcWork.left > rcWnd.left
-				? MonitorInfo.rcWork.left
-				: rcWnd.left;
-			LONG y = MonitorInfo.rcWork.top > rcWnd.top
-				? MonitorInfo.rcWork.top
-				: rcWnd.top;
-			x = MonitorInfo.rcWork.right < rcWnd.right
+			x = MonitorInfo.rcWork.right-(rcWnd.right-rcWnd.left) < rcWnd.right
 				? MonitorInfo.rcWork.right - (rcWnd.right - rcWnd.left)
 				: x;
-			y = MonitorInfo.rcWork.bottom < rcWnd.bottom
+			LONG y = MonitorInfo.rcWork.top > rcWnd.top
+				? MonitorInfo.rcWork.top
+				: rcWnd.top;
+			y= MonitorInfo.rcWork.bottom - (rcWnd.bottom - rcWnd.top) < rcWnd.bottom
 				? MonitorInfo.rcWork.bottom - (rcWnd.bottom - rcWnd.top)
 				: y;
 			SetWindowPos(hWnd, HWND_TOP
 				, x
 				, y
-				, rcWnd.right - rcWnd.left
-				, rcWnd.bottom - rcWnd.top
-				, SWP_SHOWWINDOW);
-			return TRUE;
+				, 0
+				, 0
+				, 
+			 SWP_NOSIZE
+			| SWP_NOZORDER);
+			return FALSE;
 		}
 		return FALSE;
+	}
+
+	HWND GetMainWindowHandle()
+	{
+		DWORD pid = GetCurrentProcessId();
+		HWND hwnd = GetTopWindow(0);
+		while (hwnd) {
+			DWORD p = 0;
+			DWORD ok = GetWindowThreadProcessId(hwnd, &p);
+			if (ok && p == pid) {
+				return hwnd;
+			}
+			hwnd = GetNextWindow(hwnd, GW_HWNDNEXT);
+		}
+		return 0;
 	}
 
 	string MakeTimeFormat(const string& strFormat)
@@ -973,12 +950,201 @@ namespace DUSI_COMMON {
 			stringstream ss;
 			ss << ch << " LINE:" << __LINE__ << endl;
 			cerr << ss.str();
-			MyTRACE(ss.str().c_str());
+			_D(ss.str().c_str());
 		}
 		// Use strftime to build a customized time string.
 		strftime(tmpbuf, 128,
 			strFormat.c_str(), &today);
 		return string(tmpbuf);
+	}
+
+	DOUBLE GetPointSizeFromFontHandle(HWND hDlg, HFONT hFontIn)
+	{
+		LOGFONTW lf;
+		if (GetObjectW(HGDIOBJ(hFontIn), sizeof lf, &lf)) {
+			UINT point(0);
+			if (lf.lfHeight > 0)
+			{
+				HDC hdc = GetDC(hDlg);
+				HFONT hFont = CreateFontIndirect(&lf);
+				HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);
+				TEXTMETRIC tm;
+				GetTextMetrics(hdc, &tm);
+				int ilpy=GetDeviceCaps(hdc, LOGPIXELSY);
+				SelectObject(hdc, hOldFont);
+				DeleteObject(hFont);
+				point=MulDiv((tm.tmHeight - tm.tmInternalLeading)
+					, 72
+					, ilpy);
+				ReleaseDC(hDlg, hdc);
+			}
+			else if (lf.lfHeight < 0) {
+				//フォントに関する情報が d に得られた
+				const auto hDC = GetDC(NULL);
+				int const ilpy = GetDeviceCaps(hDC, LOGPIXELSY);
+				point = -MulDiv(lf.lfHeight, 72, ilpy);
+				ReleaseDC(hDlg, hDC);
+			}
+			return point < 0 ? 0 : point;
+			//この時点で point にポイントサイズが設定されている
+		}
+		return 0;
+	}
+
+	HFONT CreateFontWithPointSize(HWND hwnd, HFONT hFont, int points)
+	{
+		LOGFONTW lf;
+		if (!GetObject(hFont, sizeof(LOGFONTW), &lf))
+		{
+			return NULL;
+		}
+		HDC hdc(NULL);
+		if (!(hdc=GetDC(hwnd)))
+		{
+			return NULL;
+		}
+		int logpixelsy = GetDeviceCaps(hdc, LOGPIXELSY);
+		ReleaseDC(hwnd, hdc);
+		lf.lfHeight = -MulDiv(points, logpixelsy, 72);
+		return CreateFontIndirect(&lf);
+	}
+
+	BOOL ReSizeDlg(const HWND hDlg, const DOUBLE ratio)
+	{
+		RECT rcPrevDlg{};
+		if (!GetWindowRect(hDlg, &rcPrevDlg))
+		{
+			ErrOut(GetLastError());
+			return FALSE;
+		}
+		if (!SetWindowPos(hDlg, NULL
+			, 0
+			, 0
+			, (rcPrevDlg.right - rcPrevDlg.left) * ratio
+			, (rcPrevDlg.bottom - rcPrevDlg.top) * ratio
+			, SWP_NOMOVE | SWP_NOZORDER))
+		{
+			ErrOut(GetLastError());
+			return FALSE;
+		}
+
+		auto data = std::make_tuple(hDlg, ratio);
+		if (!EnumChildWindows(hDlg, ResizeChildWindow, (LPARAM)&data)) {
+			return FALSE;
+		}
+		RECT rect(0, 0, (rcPrevDlg.right - rcPrevDlg.left) * ratio, (rcPrevDlg.bottom - rcPrevDlg.top) * ratio);
+		InvalidateRect(hDlg, &rect,TRUE);
+		return TRUE;
+	}
+
+	void ScaleRect(RECT* pRect, DOUBLE ratio)
+	{
+		pRect->left = (LONG)(pRect->left * ratio);
+		pRect->top = (LONG)(pRect->top * ratio);
+		pRect->right = (LONG)(pRect->right * ratio);
+		pRect->bottom = (LONG)(pRect->bottom * ratio);
+	}
+
+	BOOL CALLBACK SetFontForChildWindow(HWND   hwnd, LPARAM lParam)
+	{
+		auto pData = (std::tuple<HFONT, BOOL>*)lParam;
+		HFONT hFont = std::get<0>(*pData);
+		BOOL bRedraw = std::get<1>(*pData);
+		SendMessage(hwnd, WM_SETFONT, (WPARAM)hFont, (LPARAM)bRedraw);
+		return TRUE;
+	}
+
+	BOOL CALLBACK ResizeChildWindow(HWND hCtrl, LPARAM lParam)
+	{
+		auto pData = (std::tuple<HWND, DOUBLE>*)lParam;
+		HWND hDlg = std::get<0>(*pData);
+		DOUBLE ratio = std::get<1>(*pData);
+
+		// コントロールに表示されるテキストのサイズを計算する
+		RECT rcItem{};
+		if (!GetWindowRect(hCtrl, &rcItem))
+		{
+			ErrOut(GetLastError());
+			return FALSE;
+		}
+
+		// スクリーン座標からクライアント座標に変換する
+		ScreenToClient(hDlg, reinterpret_cast<POINT*>(&rcItem.left));
+		ScreenToClient(hDlg, reinterpret_cast<POINT*>(&rcItem.right));
+
+		// コントロールのサイズ・ポジションを変更する
+		ScaleRect(&rcItem, ratio);
+		if (!SetWindowPos(
+			hCtrl
+			, HWND_TOP
+			, rcItem.left
+			, rcItem.top
+			, rcItem.right - rcItem.left
+			, rcItem.bottom - rcItem.top
+			, SWP_NOZORDER))
+		{
+			ErrOut(GetLastError());
+			return FALSE;
+		}
+
+		return TRUE;
+	}
+
+	BOOL CALLBACK SaveChildWindowPosition(HWND hwnd, LPARAM lParam)
+	{
+		if (!lParam||!hwnd)
+		{
+			return FALSE;
+		}
+		RECT rect;
+		if (!GetWindowRect(hwnd, &rect))
+		{
+			ErrOut(GetLastError());
+			return FALSE;
+		}
+		MapWindowPoints(HWND_DESKTOP,GetParent(hwnd), (POINT*) & rect,2);
+		reinterpret_cast<std::vector<std::pair<HWND, RECT>> *>(lParam)->
+			emplace_back(hwnd, rect);
+		return TRUE;
+	}
+
+	BOOL CALLBACK ShowHideChildWindow(HWND hwnd, LPARAM lParam)
+	{
+		ShowWindow(hwnd, (BOOL)lParam ? SW_SHOW : SW_HIDE);
+		return TRUE;
+	}
+
+	BOOL OffsetMoveChildWindow(HWND hWnd, LPARAM lParam)
+	{
+		// ダイアログボックスのハンドルとオフセットを取得
+		auto params = *(std::tuple<HWND, int, int>*)lParam;
+		HWND hDlg = std::get<0>(params);
+		int cx = std::get<1>(params);
+		int cy = std::get<2>(params);
+
+		// ダイアログアイテムの位置を取得
+		RECT rc;
+		GetWindowRect(hWnd, &rc);
+
+		// ダイアログボックスのクライアント座標に変換
+		MapWindowPoints(HWND_DESKTOP, hDlg, (LPPOINT)&rc, 2);
+
+		// オフセットを加算
+		rc.left += cx;
+		rc.right += cx;
+		rc.top += cy;
+		rc.bottom += cy;
+
+		// ダイアログアイテムの位置を設定
+		SetWindowPos(hWnd
+			, 0
+			,rc.left
+			, rc.top
+			, rc.right - rc.left
+			, rc.bottom - rc.top
+			, SWP_ASYNCWINDOWPOS
+			| SWP_NOOWNERZORDER);
+		return TRUE;
 	}
 
 }
